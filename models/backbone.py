@@ -116,7 +116,7 @@ class Joiner(nn.Sequential):
         self.num_channels = backbone.num_channels
 
     def forward(self, tensor_list: NestedTensor):
-        xs = self[0](tensor_list)
+        xs = self[0](tensor_list) #self[0] maybe backbone,[1] PositionEmbedding()
         out: List[NestedTensor] = []
         pos = []
         for name, x in sorted(xs.items()):

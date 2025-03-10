@@ -6,12 +6,12 @@
 
 import torch
 
-def to_cuda(samples, targets, device):
+def to_cuda(samples, targets, device): #데이터를 cpu -> gpu로 비동기 전송.
     samples = samples.to(device, non_blocking=True)
     targets = [{k: v.to(device, non_blocking=True) for k, v in t.items()} for t in targets]
     return samples, targets
 
-class data_prefetcher():
+class data_prefetcher(): #PyTorch DataLoader에서 데이터를 **미리 로드(prefetch)** 하여 학습 속도를 높이는 클래스
     def __init__(self, loader, device, prefetch=True):
         self.loader = iter(loader)
         self.prefetch = prefetch

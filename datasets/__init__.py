@@ -17,7 +17,7 @@ def get_coco_api_from_dataset(dataset):
     for _ in range(10):
         # if isinstance(dataset, torchvision.datasets.CocoDetection):
         #     break
-        if isinstance(dataset, torch.utils.data.Subset):
+        if isinstance(dataset, torch.utils.data.Subset): #인스턴스인지 확인.
             dataset = dataset.dataset
     if isinstance(dataset, CocoDetection):
         return dataset.coco

@@ -123,7 +123,7 @@ class DeformableTransformer(nn.Module):
         valid_ratio = torch.stack([valid_ratio_w, valid_ratio_h], -1)
         return valid_ratio
 
-    def forward(self, srcs, masks, pos_embeds, query_embed=None):
+    def forward(self, srcs, masks, pos_embeds, query_embed=None): #forward함수메모완료.
         assert self.two_stage or query_embed is not None
 
         # prepare input for encoder
@@ -153,16 +153,20 @@ class DeformableTransformer(nn.Module):
         memory = self.encoder(src_flatten, spatial_shapes, level_start_index, valid_ratios, lvl_pos_embed_flatten, mask_flatten)
 
         # prepare input for decoder
-        bs, _, c = memory.shape
+        bs, _, c = memory.shape #memory shape확인
         if self.two_stage:
             output_memory, output_proposals = self.gen_encoder_output_proposals(memory, mask_flatten, spatial_shapes)
 
             # hack implementation for two-stage Deformable DETR
             enc_outputs_class = self.decoder.class_embed[self.decoder.num_layers](output_memory)
+            enc_outputs_obj = self.decoder.object_head[self.decoder.num_layers](output_memory)
             enc_outputs_coord_unact = self.decoder.bbox_embed[self.decoder.num_layers](output_memory) + output_proposals
 
             topk = self.two_stage_num_proposals
-            topk_proposals = torch.topk(enc_outputs_class[..., 0], topk, dim=1)[1]
+            tmp, topk_proposals = torch.topk(enc_outputs_obj, topk, dim=1)
+            
+            #topk_proposals = torch.topk(enc_outputs_class[..., 0], topk, dim=1)[1]
+            topk_proposals = topk_proposals.squeeze(2) #제거
             topk_coords_unact = torch.gather(enc_outputs_coord_unact, 1, topk_proposals.unsqueeze(-1).repeat(1, 1, 4))
             topk_coords_unact = topk_coords_unact.detach()
             reference_points = topk_coords_unact.sigmoid()
@@ -182,7 +186,8 @@ class DeformableTransformer(nn.Module):
 
         inter_references_out = inter_references
         if self.two_stage:
-            return hs, init_reference_out, inter_references_out, enc_outputs_class, enc_outputs_coord_unact
+            #return에 enc_outputs_obj 추가해야함.
+            return hs, init_reference_out, inter_references_out, enc_outputs_class, enc_outputs_coord_unact,enc_outputs_obj
         return hs, init_reference_out, inter_references_out, None, None
 
 
@@ -193,16 +198,16 @@ class DeformableTransformerEncoderLayer(nn.Module):
                  n_levels=4, n_heads=8, n_points=4):
         super().__init__()
 
-        # self attention
+        # self attention 
         self.self_attn = MSDeformAttn(d_model, n_levels, n_heads, n_points)
         self.dropout1 = nn.Dropout(dropout)
         self.norm1 = nn.LayerNorm(d_model)
 
-        # ffn
-        self.linear1 = nn.Linear(d_model, d_ffn)
+        # ffn 
+        self.linear1 = nn.Linear(d_model, d_ffn)  #256->1024
         self.activation = _get_activation_fn(activation)
         self.dropout2 = nn.Dropout(dropout)
-        self.linear2 = nn.Linear(d_ffn, d_model)
+        self.linear2 = nn.Linear(d_ffn, d_model) #1024->256
         self.dropout3 = nn.Dropout(dropout)
         self.norm2 = nn.LayerNorm(d_model)
 
@@ -296,6 +301,7 @@ class DeformableTransformerDecoderLayer(nn.Module):
         # self attention
         q = k = self.with_pos_embed(tgt, query_pos)
         tgt2 = self.self_attn(q.transpose(0, 1), k.transpose(0, 1), tgt.transpose(0, 1))[0].transpose(0, 1)
+        #value는 target사용
         tgt = tgt + self.dropout2(tgt2)
         tgt = self.norm2(tgt)
 
@@ -321,10 +327,12 @@ class DeformableTransformerDecoder(nn.Module):
         # hack implementation for iterative bounding box refinement and two-stage Deformable DETR
         self.bbox_embed = None
         self.class_embed = None
-
+        self.object_head = None
+        #첨엔 다 None
     def forward(self, tgt, reference_points, src, src_spatial_shapes, src_level_start_index, src_valid_ratios,
                 query_pos=None, src_padding_mask=None):
-        output = tgt
+        output = tgt 
+        
 
         intermediate = []
         intermediate_reference_points = []
@@ -337,10 +345,12 @@ class DeformableTransformerDecoder(nn.Module):
                 reference_points_input = reference_points[:, :, None] * src_valid_ratios[:, None]
             output = layer(output, query_pos, reference_points_input, src, src_spatial_shapes, src_level_start_index, src_padding_mask)
 
-            # hack implementation for iterative bounding box refinement
+            # hack implementation for iterative bounding box refinement 
+            #output에 오류잇어.
             if self.bbox_embed is not None:
-                tmp = self.bbox_embed[lid](output)
-                if reference_points.shape[-1] == 4:
+                tmp = self.bbox_embed[lid](output) #iterative bounding box refinement
+                #bbox_embed[]확인 = module이야.  bounding box값과 reference_point를 더해주기.
+                if reference_points.shape[-1] == 4: #본래 reference_points는 0~1로 정규화된 좌표야.
                     new_reference_points = tmp + inverse_sigmoid(reference_points)
                     new_reference_points = new_reference_points.sigmoid()
                 else:

@@ -30,7 +30,7 @@ class CocoDetection(TvCocoDetection):
         self._transforms = transforms
         self.prepare = ConvertCocoPolysToMask(return_masks)
 
-    def __getitem__(self, idx):
+    def __getitem__(self, idx): #인덱스처럼 접근가능
         img, target = super(CocoDetection, self).__getitem__(idx)
         image_id = self.ids[idx]
         target = {'image_id': image_id, 'annotations': target}
@@ -163,7 +163,7 @@ def build(image_set, args):
         "val": (root / "val2017", root / "annotations" / f'{mode}_val2017.json'),
     }
 
-    img_folder, ann_file = PATHS[image_set]
+    img_folder, ann_file = PATHS[image_set] #변수확인하기 (PosixPath('/mnt/d/data/VOC2/COCO/train2017'), PosixPath('/mnt/d/data/VOC2/COCO/annotations/instances_train2017.json'))
     dataset = CocoDetection(img_folder, ann_file, transforms=make_coco_transforms(image_set), return_masks=args.masks,
                             cache_mode=args.cache_mode, local_rank=get_local_rank(), local_size=get_local_size())
     return dataset

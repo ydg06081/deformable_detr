@@ -939,7 +939,7 @@ void ms_deformable_im2col_cuda(cudaStream_t stream,
   const int num_kernels = batch_size * num_query * num_heads * channels;
   const int num_actual_kernels = batch_size * num_query * num_heads * channels;
   const int num_threads = CUDA_NUM_THREADS;
-  ms_deformable_im2col_gpu_kernel<scalar_t>
+  ms_deformable_im2col_gpu_kernel<scalar_t>//<<<는 gpu커널을 불러
       <<<GET_BLOCKS(num_actual_kernels, num_threads), num_threads,
           0, stream>>>(
       num_kernels, data_value, data_spatial_shapes, data_level_start_index, data_sampling_loc, data_attn_weight, 

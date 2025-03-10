@@ -45,8 +45,8 @@ def get_args_parser():
     parser.add_argument('--sgd', action='store_true')
 
     # Variants of Deformable DETR
-    parser.add_argument('--with_box_refine', default=False, action='store_true')
-    parser.add_argument('--two_stage', default=False, action='store_true')
+    parser.add_argument('--with_box_refine', default=True, action='store_true')
+    parser.add_argument('--two_stage', default=True, action='store_true')
 
     # Model parameters
     parser.add_argument('--frozen_weights', type=str, default=None,
@@ -103,11 +103,13 @@ def get_args_parser():
     parser.add_argument('--cls_loss_coef', default=2, type=float)
     parser.add_argument('--bbox_loss_coef', default=5, type=float)
     parser.add_argument('--giou_loss_coef', default=2, type=float)
+    parser.add_argument('--obj_loss_coef', default=3, type=float)
+    parser.add_argument('--f_obj_loss_coef', default=3, type=float)
     parser.add_argument('--focal_alpha', default=0.25, type=float)
 
     # dataset parameters
     parser.add_argument('--dataset_file', default='coco')
-    parser.add_argument('--coco_path', default='./data/coco', type=str)
+    parser.add_argument('--coco_path', default='/mnt/d/data/VOC2/COCO', type=str)
     parser.add_argument('--coco_panoptic_path', type=str)
     parser.add_argument('--remove_difficult', action='store_true')
 
@@ -116,7 +118,7 @@ def get_args_parser():
     parser.add_argument('--device', default='cuda',
                         help='device to use for training / testing')
     parser.add_argument('--seed', default=42, type=int)
-    parser.add_argument('--resume', default='', help='resume from checkpoint')
+    parser.add_argument('--resume', default='', help='resume from checkpoint') 
     parser.add_argument('--start_epoch', default=0, type=int, metavar='N',
                         help='start epoch')
     parser.add_argument('--eval', action='store_true')
@@ -134,7 +136,7 @@ def main(args):
         assert args.masks, "Frozen training is meant for segmentation only"
     print(args)
 
-    device = torch.device(args.device)
+    device = torch.device(args.device)#device는 cuda
 
     # fix the seed for reproducibility
     seed = args.seed + utils.get_rank()
@@ -172,7 +174,22 @@ def main(args):
     data_loader_val = DataLoader(dataset_val, args.batch_size, sampler=sampler_val,
                                  drop_last=False, collate_fn=utils.collate_fn, num_workers=args.num_workers,
                                  pin_memory=True)
-
+ #targets = <class 'list'>,images =<class 'util.misc.NestedTensor'> 그림 그려보기.
+ 
+    # for images, targets in data_loader_train:
+    #     print(f"Images batch shape: {images.tensors.shape}")
+    #     print(f"Targets: {targets}")
+    #     image_tensor = images.tensors[0]
+    #     break
+    # import matplotlib.pyplot as plt
+    # import torchvision.transforms as T
+    # image_np = image_tensor.permute(1, 2, 0).cpu().numpy()
+    # if image_np.max() <= 1.0:
+    #     image_np = (image_np * 255).astype("uint8") 
+    # plt.imshow(image_np)
+    # plt.axis("off")  # 축 제거
+    # plt.show()
+      
     # lr_backbone_names = ["backbone.0", "backbone.neck", "input_proj", "transformer.encoder"]
     def match_name_keywords(n, name_keywords):
         out = False
@@ -208,7 +225,8 @@ def main(args):
         optimizer = torch.optim.AdamW(param_dicts, lr=args.lr,
                                       weight_decay=args.weight_decay)
     lr_scheduler = torch.optim.lr_scheduler.StepLR(optimizer, args.lr_drop)
-
+    #학습 초기엔 큰 학습률로 빠르게 방향을 찾고 이후에는 작은 학습률로 세밀하게 최적화.
+    #learning rate는 경사하강법같은 알고리즘에서 가중치를 업데이트하는 스텝 크기를 나타냄. 
     if args.distributed:
         model = torch.nn.parallel.DistributedDataParallel(model, device_ids=[args.gpu])
         model_without_ddp = model.module
@@ -277,9 +295,9 @@ def main(args):
         lr_scheduler.step()
         if args.output_dir:
             checkpoint_paths = [output_dir / 'checkpoint.pth']
-            # extra checkpoint before LR drop and every 5 epochs
+            # extra checkpoint before LR drop and every 5 epochs lr_drop = 40
             if (epoch + 1) % args.lr_drop == 0 or (epoch + 1) % 5 == 0:
-                checkpoint_paths.append(output_dir / f'checkpoint{epoch:04}.pth')
+                checkpoint_paths.append(output_dir / f'checkpoint{epoch:04}.pth') #/는 경로결합.
             for checkpoint_path in checkpoint_paths:
                 utils.save_on_master({
                     'model': model_without_ddp.state_dict(),
